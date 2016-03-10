@@ -1,7 +1,7 @@
 extern crate clap;
 extern crate tiny_http;
 
-use clap::ArgMatches;
+use clap::{App, Arg, ArgMatches, SubCommand};
 use game::{Game, GameError, ProvidesGuess, ProvidesGuessError};
 use std::io::Error as IoError;
 use tiny_http::{Server, Request, Response};
@@ -46,6 +46,19 @@ impl ProvidesGuess for FormData {
             false =>        Ok(self.read_guess())
         }
     }
+}
+
+pub fn declare<'a, 'b>() -> App<'a, 'b> {
+    SubCommand::with_name("http")
+        .about("Play via a HTTP server and web interface")
+        .arg(
+            Arg::with_name("port")
+                .help("Port for the http server to listen on.")
+                .short("p")
+                .long("port")
+                .takes_value(true)
+                .value_name("PORT")
+        )
 }
 
 pub fn run(matches: &ArgMatches) {
