@@ -1,0 +1,10 @@
+[package]
+name = "guessing-game"
+version = "0.0.1"
+authors = ["Filip Hendrik <stoatally@gmail.com>"]
+
+[dependencies]
+clap = "2.1.2"
+gtk = "*"
+rand = "0.3.0"
+tiny_http = "0.5"
