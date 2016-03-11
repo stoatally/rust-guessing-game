@@ -32,7 +32,7 @@ impl Game {
 
         game.reset();
 
-        game
+        return game;
     }
 
     pub fn reset(&mut self) {
@@ -46,26 +46,26 @@ impl Game {
     pub fn make_guess(&mut self, provider: &ProvidesGuess) -> Result<(), GameError> {
         self.guess = String::from("");
 
-        match provider.guess() {
+        return match provider.guess() {
             Err(ProvidesGuessError::Empty) =>   Err(GameError::GuessNotMade),
             Ok(guess) =>                        self.parse_guess(&guess)
-        }
+        };
     }
 
     fn parse_guess(&mut self, guess: &String) -> Result<(), GameError> {
-        match guess.trim().parse::<u32>() {
+        return match guess.trim().parse::<u32>() {
             Ok(guess) =>                        self.compare_guess(&guess),
             Err(_) =>                           Err(GameError::GuessIsInvalid)
-        }
+        };
     }
 
     fn compare_guess(&mut self, guess: &u32) -> Result<(), GameError> {
         self.guess = guess.to_string();
 
-        match guess.cmp(&self.secret) {
+        return match guess.cmp(&self.secret) {
             Ordering::Less =>                   Err(GameError::GuessIsLow),
             Ordering::Greater =>                Err(GameError::GuessIsHigh),
             Ordering::Equal =>                  Ok(())
-        }
+        };
     }
 }

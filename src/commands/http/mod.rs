@@ -12,7 +12,7 @@ struct FormData {
 
 impl FormData {
     pub fn new(request: &mut Request) -> FormData {
-        match request.body_length() {
+        return match request.body_length() {
             Some(length) => {
                                 let reader = request.as_reader();
                                 let mut data = String::with_capacity(length);
@@ -26,30 +26,30 @@ impl FormData {
             None =>         FormData {
                                 data: String::from("")
                             }
-        }
+        };
     }
 
     fn read_guess(&self) -> String {
-        self.data.split('=')
+        return self.data.split('=')
             .map(String::from)
             .collect::<Vec<String>>()
             .last()
             .unwrap()
-            .to_owned()
+            .to_owned();
     }
 }
 
 impl ProvidesGuess for FormData {
     fn guess(&self) -> Result<String, ProvidesGuessError> {
-        match self.data.is_empty() {
+        return match self.data.is_empty() {
             true =>         Err(ProvidesGuessError::Empty),
             false =>        Ok(self.read_guess())
-        }
+        };
     }
 }
 
 pub fn declare<'a, 'b>() -> App<'a, 'b> {
-    SubCommand::with_name("http")
+    return SubCommand::with_name("http")
         .about("Play via a HTTP server and web interface")
         .arg(
             Arg::with_name("port")
@@ -58,28 +58,28 @@ pub fn declare<'a, 'b>() -> App<'a, 'b> {
                 .long("port")
                 .takes_value(true)
                 .value_name("PORT")
-        )
+        );
 }
 
 pub fn run(matches: &ArgMatches) {
-    match matches.value_of("port") {
+    return match matches.value_of("port") {
         Some(port) =>   parse_port_arg(port),
         None =>         run_on_port(9090)
-    }
+    };
 }
 
 fn parse_port_arg(port: &str) {
-    match port.to_string().parse::<u32>() {
+    return match port.to_string().parse::<u32>() {
         Err(_) =>       println!("Invalid value for --port."),
         Ok(port) =>     run_on_port(port)
-    }
+    };
 }
 
 fn run_on_port(port: u32) {
-    match server(port) {
+    return match server(port) {
         Err(_) =>       println!("Could not start port using --port {}.", port),
         Ok(_) =>        {}
-    }
+    };
 }
 
 fn server(port: u32) -> Result<(), ()> {
@@ -96,7 +96,7 @@ fn server(port: u32) -> Result<(), ()> {
         handle(&mut game, request);
     };
 
-    Ok(())
+    return Ok(());
 }
 
 fn handle(game: &mut Game, mut request: Request) {
@@ -121,7 +121,7 @@ fn handle(game: &mut Game, mut request: Request) {
                                 },
         Ok(_) =>                {
                                     html.push_str("<p>You guessed the number correctly! Guess a new number between 1 and 100:</p>");
-                                    game.reset()
+                                    game.reset();
                                 }
     };
 
@@ -138,7 +138,5 @@ fn respond(request: Request, html: String) -> Result<(), IoError> {
             value: "text/html".parse().unwrap()
         });
 
-    let result = request.respond(response);
-
-    result
+    return request.respond(response);
 }
