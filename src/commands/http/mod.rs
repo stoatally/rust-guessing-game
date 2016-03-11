@@ -2,16 +2,16 @@ extern crate clap;
 extern crate tiny_http;
 
 use clap::{App, Arg, ArgMatches, SubCommand};
-use game::{Game, GameError, ProvidesGuess, ProvidesGuessError};
+use game::{Game, GameState, ProvidesGuess, ProvidesGuessError};
 use std::io::Error as IoError;
 use tiny_http::{Server, Request, Response};
 
-struct FormData {
+struct HttpData {
     data:       String
 }
 
-impl FormData {
-    pub fn new(request: &mut Request) -> FormData {
+impl HttpData {
+    pub fn new(request: &mut Request) -> HttpData {
         return match request.body_length() {
             Some(length) => {
                                 let reader = request.as_reader();
@@ -19,11 +19,11 @@ impl FormData {
 
                                 reader.read_to_string(&mut data).unwrap();
 
-                                FormData {
+                                HttpData {
                                     data: data
                                 }
                             },
-            None =>         FormData {
+            None =>         HttpData {
                                 data: String::from("")
                             }
         };
@@ -39,12 +39,98 @@ impl FormData {
     }
 }
 
-impl ProvidesGuess for FormData {
+impl ProvidesGuess for HttpData {
     fn guess(&self) -> Result<String, ProvidesGuessError> {
         return match self.data.is_empty() {
             true =>         Err(ProvidesGuessError::Empty),
             false =>        Ok(self.read_guess())
         };
+    }
+}
+
+struct HttpWorker {
+    game:   Game
+}
+
+impl HttpWorker {
+    fn new(game: Game) -> HttpWorker {
+        return HttpWorker {
+            game:   game
+        };
+    }
+
+    fn handle(&mut self, mut request: Request) {
+        let mut html = self.make_guess(HttpData::new(&mut request));
+
+        html.push_str("<form method=\"post\"><input name=\"guess\" type=\"number\" /><button>Submit</button></form>");
+
+        self.respond(request, html)
+            .expect("Failed to send the response.");
+    }
+
+    fn make_guess(&mut self, data: HttpData) -> String {
+        return match self.game.make_guess(&data) {
+            GameState::GuessNotMade =>      self.guess_not_made(),
+            GameState::GuessIsInvalid =>    self.guess_is_invalid(),
+            GameState::GuessIsLow =>        self.guess_is_low(),
+            GameState::GuessIsHigh =>       self.guess_is_high(),
+            GameState::GuessWon =>          self.guess_won()
+        };
+    }
+
+    fn guess_not_made(&mut self) -> String {
+        return String::from("<p>Guess a number between 1 and 100:</p>");
+    }
+
+    fn guess_is_invalid(&mut self) -> String {
+        return format!("<p>You guessed &ldquo;{}&rdquo;, that isn't actually a number...</p>", self.game.guess());
+    }
+
+    fn guess_is_low(&mut self) -> String {
+        return format!("<p>You guessed {}, which is too small...</p>", self.game.guess());
+    }
+
+    fn guess_is_high(&mut self) -> String {
+        return format!("<p>You guessed {}, which is too big...</p>", self.game.guess());
+    }
+
+    fn guess_won(&mut self) -> String {
+        self.game.reset();
+
+        return String::from("<p>You guessed the number correctly! Guess a new number between 1 and 100:</p>");
+    }
+
+    fn respond(&mut self, request: Request, html: String) -> Result<(), IoError> {
+        let response = Response::from_string(html)
+            .with_header(tiny_http::Header {
+                field: "Content-Type".parse().unwrap(),
+                value: "text/html".parse().unwrap()
+            });
+
+        return request.respond(response);
+    }
+}
+
+struct HttpServer {
+    port:   u32,
+    server: Server
+}
+
+impl HttpServer {
+    fn new(port: u32) -> Result<HttpServer, ()> {
+        return match Server::http(format!("0.0.0.0:{}", port).as_str()) {
+            Ok(server) =>   Ok(HttpServer {
+                                port:   port,
+                                server: server
+                            }),
+            _ =>            Err(())
+        };
+    }
+
+    fn listen(&self, worker: &mut HttpWorker) {
+        for request in self.server.incoming_requests() {
+            worker.handle(request);
+        }
     }
 }
 
@@ -76,67 +162,12 @@ fn parse_port_arg(port: &str) {
 }
 
 fn run_on_port(port: u32) {
-    return match server(port) {
+    return match HttpServer::new(port) {
         Err(_) =>       println!("Could not start port using --port {}.", port),
-        Ok(_) =>        {}
+        Ok(server) =>   {
+                            println!("Game available on http://127.0.0.1:{}/.", server.port);
+
+                            server.listen(&mut HttpWorker::new(Game::new()));
+                        }
     };
-}
-
-fn server(port: u32) -> Result<(), ()> {
-    let mut game = Game::new();
-
-    let server = match Server::http(format!("0.0.0.0:{}", port).as_str()) {
-        Ok(server) =>   server,
-        _ =>            return Err(())
-    };
-
-    println!("Game available on http://127.0.0.1:{}/.", port);
-
-    for request in server.incoming_requests() {
-        handle(&mut game, request);
-    };
-
-    return Ok(());
-}
-
-fn handle(game: &mut Game, mut request: Request) {
-    let mut html = String::new();
-
-    match game.make_guess(&FormData::new(&mut request)) {
-        Err(GameError::GuessNotMade) =>
-                                {
-                                    html.push_str("<p>Guess a number between 1 and 100:</p>");
-                                },
-        Err(GameError::GuessIsInvalid) =>
-                                {
-                                    html.push_str(format!("<p>You guessed &ldquo;{}&rdquo;, that isn't actually a number...</p>", game.guess()).as_str());
-                                },
-        Err(GameError::GuessIsLow) =>
-                                {
-                                    html.push_str(format!("<p>You guessed {}, which is too small...</p>", game.guess()).as_str());
-                                },
-        Err(GameError::GuessIsHigh) =>
-                                {
-                                    html.push_str(format!("<p>You guessed {}, which is too big...</p>", game.guess()).as_str());
-                                },
-        Ok(_) =>                {
-                                    html.push_str("<p>You guessed the number correctly! Guess a new number between 1 and 100:</p>");
-                                    game.reset();
-                                }
-    };
-
-    html.push_str("<form method=\"post\"><input name=\"guess\" type=\"number\" /><button>Submit</button></form>");
-
-    respond(request, html)
-        .expect("Failed to send the response.");
-}
-
-fn respond(request: Request, html: String) -> Result<(), IoError> {
-    let response = Response::from_string(html)
-        .with_header(tiny_http::Header {
-            field: "Content-Type".parse().unwrap(),
-            value: "text/html".parse().unwrap()
-        });
-
-    return request.respond(response);
 }

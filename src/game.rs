@@ -11,11 +11,12 @@ pub trait ProvidesGuess {
     fn guess(&self) -> Result<String, ProvidesGuessError>;
 }
 
-pub enum GameError {
+pub enum GameState {
     GuessNotMade,
     GuessIsInvalid,
     GuessIsLow,
-    GuessIsHigh
+    GuessIsHigh,
+    GuessWon
 }
 
 pub struct Game {
@@ -43,29 +44,29 @@ impl Game {
         self.guess.clone()
     }
 
-    pub fn make_guess(&mut self, provider: &ProvidesGuess) -> Result<(), GameError> {
+    pub fn make_guess(&mut self, provider: &ProvidesGuess) -> GameState {
         self.guess = String::from("");
 
         return match provider.guess() {
-            Err(ProvidesGuessError::Empty) =>   Err(GameError::GuessNotMade),
+            Err(ProvidesGuessError::Empty) =>   GameState::GuessNotMade,
             Ok(guess) =>                        self.parse_guess(&guess)
         };
     }
 
-    fn parse_guess(&mut self, guess: &String) -> Result<(), GameError> {
+    fn parse_guess(&mut self, guess: &String) -> GameState {
         return match guess.trim().parse::<u32>() {
-            Ok(guess) =>                        self.compare_guess(&guess),
-            Err(_) =>                           Err(GameError::GuessIsInvalid)
+            Err(_) =>                           GameState::GuessIsInvalid,
+            Ok(guess) =>                        self.compare_guess(&guess)
         };
     }
 
-    fn compare_guess(&mut self, guess: &u32) -> Result<(), GameError> {
+    fn compare_guess(&mut self, guess: &u32) -> GameState {
         self.guess = guess.to_string();
 
         return match guess.cmp(&self.secret) {
-            Ordering::Less =>                   Err(GameError::GuessIsLow),
-            Ordering::Greater =>                Err(GameError::GuessIsHigh),
-            Ordering::Equal =>                  Ok(())
+            Ordering::Less =>                   GameState::GuessIsLow,
+            Ordering::Greater =>                GameState::GuessIsHigh,
+            Ordering::Equal =>                  GameState::GuessWon
         };
     }
 }
